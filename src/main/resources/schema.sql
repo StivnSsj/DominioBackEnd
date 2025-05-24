@@ -1,24 +1,5 @@
 -- src/main/resources/schema.sql
 
--- Eliminación de tablas existentes para asegurar una creación limpia en cada reinicio (útil para H2 en memoria)
-DROP TABLE IF EXISTS evaluacion_criterio CASCADE;
-DROP TABLE IF EXISTS detalle_evaluacion CASCADE;
-DROP TABLE IF EXISTS evaluacion CASCADE;
-DROP TABLE IF EXISTS rubrica_criterio CASCADE;
-DROP TABLE IF EXISTS nivel_desempeno CASCADE;
-DROP TABLE IF EXISTS criterio_evaluacion CASCADE;
-DROP TABLE IF EXISTS rubrica CASCADE;
-DROP TABLE IF EXISTS resultado_aprendizaje_asignatura CASCADE;
-
--- Mocks de entidades que no están en el alcance principal (pero necesarias para FKs)
-DROP TABLE IF EXISTS asignatura CASCADE;
-DROP TABLE IF EXISTS programa_academico CASCADE;
-DROP TABLE IF EXISTS competencia_programa CASCADE;
-DROP TABLE IF EXISTS resultado_aprendizaje_programa CASCADE;
-DROP TABLE IF EXISTS docente CASCADE;
-DROP TABLE IF EXISTS estudiante CASCADE;
-DROP TABLE IF EXISTS evaluador_externo CASCADE;
-
 
 -- Tabla para Docentes (Mock para referencia en RAA y Rúbricas)
 CREATE TABLE docente (

@@ -119,52 +119,77 @@ public class EvaluacionServiceImpl implements EvaluacionService {
     @Override
     @Transactional
     public EvaluacionResponseDto calculateFinalGrade(String evaluacionId) {
+        System.out.println("DEBUG: Iniciando cálculo de nota para evaluación con ID: " + evaluacionId);
+
         Evaluacion evaluacion = evaluacionRepository.findById(evaluacionId)
                 .orElseThrow(() -> new RuntimeException("Evaluación con ID " + evaluacionId + " no encontrada."));
+        System.out.println("DEBUG: Evaluación encontrada: " + evaluacion.getId());
 
-        // Asegurarse de que los criterios y niveles estén cargados en la entidad Rubrica
-        // Esto podría requerir @Fetch(FetchMode.JOIN) o una consulta personalizada en el repositorio
+
         Rubrica rubrica = rubricaRepository.findById(evaluacion.getRubrica().getId())
-                            .orElseThrow(() -> new RuntimeException("Rúbrica asociada a evaluación no encontrada."));
+                                .orElseThrow(() -> new RuntimeException("Rúbrica asociada a evaluación no encontrada."));
 
-        List<CriterioEvaluacion> criteriosRubrica = criterioEvaluacionRepository.findByRubrica(rubrica); // Asumo que existe este método en CriterioEvaluacionRepository
+        System.out.println("DEBUG: Rúbrica asociada encontrada: " + rubrica.getNombre() + " (ID: " + rubrica.getId() + ")");
+        List<CriterioEvaluacion> criteriosRubrica = criterioEvaluacionRepository.findByRubrica(rubrica);
+
+        System.out.println("DEBUG: Criterios encontrados para la rúbrica: " + criteriosRubrica.size());
 
         if (criteriosRubrica.isEmpty()) {
+            System.out.println("DEBUG ERROR: La rúbrica asociada NO tiene criterios definidos.");
             throw new IllegalStateException("La rúbrica asociada no tiene criterios definidos.");
         }
 
         BigDecimal notaCalculada = BigDecimal.ZERO;
         BigDecimal sumaPonderacionesCriterios = BigDecimal.ZERO;
 
+        // Recuperar los detalles de la evaluación asociados, asegurándose de que estén cargados
+        // Si evaluacion.getDetalles() es Lazy, esta línea los cargará dentro de la transacción
+        List<DetalleEvaluacion> detallesEvaluacion = detalleEvaluacionRepository.findByEvaluacion(evaluacion); // Asumo que tienes este método en tu repositorio
+
+        System.out.println("DEBUG: Detalles de evaluación cargados para la evaluación: " + detallesEvaluacion.size());
+
         for (CriterioEvaluacion criterioRubrica : criteriosRubrica) {
-            Optional<DetalleEvaluacion> detalleCriterioOpt = evaluacion.getDetalles().stream()
+            System.out.println("DEBUG: Procesando criterio: " + criterioRubrica.getDescripcion() + " (ID: " + criterioRubrica.getId() + ")");
+
+            Optional<DetalleEvaluacion> detalleCriterioOpt = detallesEvaluacion.stream()
                     .filter(detalle -> detalle.getCriterioEvaluacion().getId().equals(criterioRubrica.getId()))
                     .findFirst();
 
             if (detalleCriterioOpt.isEmpty()) {
+                System.out.println("DEBUG ERROR: NO se encontró detalle de evaluación para el criterio: " + criterioRubrica.getId());
                 throw new IllegalStateException("No se encontró detalle de evaluación para el criterio " + criterioRubrica.getDescripcion());
             }
 
             DetalleEvaluacion detalleCriterio = detalleCriterioOpt.get();
-            // Asegurarse de que el nivel de desempeño está cargado
+            System.out.println("DEBUG: Detalle encontrado para el criterio " + criterioRubrica.getId() + ". Nivel seleccionado ID: " + detalleCriterio.getNivelDesempenoSeleccionado().getId());
+
             NivelDesempeno nivelSeleccionado = nivelDesempenoRepository.findById(detalleCriterio.getNivelDesempenoSeleccionado().getId())
-                .orElseThrow(() -> new RuntimeException("Nivel de desempeño seleccionado no encontrado."));
+                .orElseThrow(() -> new RuntimeException("Nivel de desempeño seleccionado no encontrado con ID: " + detalleCriterio.getNivelDesempenoSeleccionado().getId()));
+            System.out.println("DEBUG: Nivel de desempeño seleccionado cargado: " + nivelSeleccionado.getNombre() + " (Min: " + nivelSeleccionado.getNotaMinima() + ", Max: " + nivelSeleccionado.getNotaMaxima() + ")");
 
             BigDecimal notaNivel = nivelSeleccionado.getNotaMinima()
                     .add(nivelSeleccionado.getNotaMaxima())
                     .divide(BigDecimal.valueOf(2), 2, RoundingMode.HALF_UP);
+            System.out.println("DEBUG: Nota promedio del nivel (" + nivelSeleccionado.getNombre() + "): " + notaNivel);
+
 
             BigDecimal ponderacion = criterioRubrica.getPonderacion().divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+            System.out.println("DEBUG: Ponderación del criterio (" + criterioRubrica.getDescripcion() + "): " + ponderacion);
+
             notaCalculada = notaCalculada.add(notaNivel.multiply(ponderacion));
             sumaPonderacionesCriterios = sumaPonderacionesCriterios.add(criterioRubrica.getPonderacion());
+            System.out.println("DEBUG: Nota calculada provisional: " + notaCalculada + ", Suma ponderaciones provisional: " + sumaPonderacionesCriterios);
         }
 
+        System.out.println("DEBUG: Suma final de ponderaciones de criterios: " + sumaPonderacionesCriterios);
         if (sumaPonderacionesCriterios.compareTo(BigDecimal.valueOf(100)) != 0) {
+            System.out.println("DEBUG ERROR: La suma de ponderaciones NO es 100. Es: " + sumaPonderacionesCriterios);
             throw new IllegalStateException("La suma de ponderaciones de los criterios de la rúbrica no es 100.");
         }
 
         evaluacion.setNotaFinal(notaCalculada.setScale(2, RoundingMode.HALF_UP));
         Evaluacion updatedEvaluacion = evaluacionRepository.save(evaluacion);
+        System.out.println("DEBUG: Nota final calculada y guardada: " + evaluacion.getNotaFinal());
         return modelMapper.map(updatedEvaluacion, EvaluacionResponseDto.class);
     }
 
